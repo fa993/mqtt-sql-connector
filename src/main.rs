@@ -34,26 +34,40 @@ impl From<(String, Bytes, DateTime<Utc>)> for MessagePayload {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
+    let result = do_main().await;
+
+    if let Err(e) = result {
+        println!("Error: {}", e);
+    }
+}
+
+async fn do_main() -> anyhow::Result<()> {
     let mut mqttoptions = MqttOptions::new("rumqtt-sync", "localhost", 1883);
     mqttoptions.set_keep_alive(Duration::from_secs(5));
 
-    let topic_name = "hello/rumqtt";
+    let topic_name = dotenvy::var("TOPIC_NAME")?;
 
     let (client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
-    client.subscribe(topic_name, QoS::AtMostOnce).await.unwrap();
+    client
+        .subscribe(topic_name.as_str(), QoS::AtMostOnce)
+        .await?;
 
     let mut manager =
         Manager::new(PostgresDriver::connect(dotenvy::var("DATABASE_URL")?.as_str()).await?);
 
-    manager.initialize(&MQTable::from_topic(topic_name)).await?;
+    manager
+        .initialize(&MQTable::from_topic(topic_name.as_str()))
+        .await?;
 
     println!("Manager initialized");
 
     let (tx, rx) = mpsc::unbounded_channel::<MessagePayload>();
 
-    let handle = spawn(async move {
+    // let handle =
+    spawn(async move {
         let mut rx = rx;
+
         while let Some(MessagePayload {
             topic,
             payload,
@@ -73,19 +87,19 @@ async fn main() -> anyhow::Result<()> {
         anyhow::Ok(())
     });
 
-    while let Ok(notification) = eventloop.poll().await {
-        // println!("Received = {:?}", notification);
+    loop {
+        let notification = eventloop.poll().await?;
+        println!("Notification: {:?}", notification);
         match notification {
             rumqttc::Event::Incoming(rumqttc::Packet::Publish(p)) => {
-                println!("Payload = {:?}", p.payload);
-
                 tx.send((p.topic, p.payload, Utc::now()).into())?;
             }
-            _ => { /*println!("Other = {:?}", notification);*/ }
+            _ => {}
         }
     }
 
-    handle.abort();
+    // move this to RAII drop impl
+    // drop(tx);
 
-    Ok(())
+    // return handle.await?;
 }
