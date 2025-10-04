@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use crate::db::{Cell, DataRow};
 
-pub fn json_to_data_row(json: &str) -> anyhow::Result<DataRow> {
+pub fn json_to_data_row(json: &str, timestamp: DateTime<Utc>) -> anyhow::Result<DataRow> {
     let v: Value = serde_json::from_str(json)?;
 
     let original_json = v.clone();
@@ -16,6 +17,10 @@ pub fn json_to_data_row(json: &str) -> anyhow::Result<DataRow> {
             .collect();
 
         cells.insert("raw".to_string(), Cell::JsonObject(original_json));
+        cells.insert(
+            "received_ts".to_string(),
+            Cell::DateTime(timestamp.naive_utc()),
+        );
 
         Ok(DataRow { cells })
     } else {

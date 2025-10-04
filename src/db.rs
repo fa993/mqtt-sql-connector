@@ -4,12 +4,14 @@ use std::collections::HashMap;
 use crate::utils::get_wildcard_string;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Cell {
+pub enum Cell<Tz: chrono::TimeZone = chrono::Utc> {
     // have to think about this
     JsonObject(serde_json::Value),
     Number(i64),
     String(String),
     Bool(bool),
+    DateTime(chrono::NaiveDateTime),
+    DateTimeTz(chrono::DateTime<Tz>),
     Null,
 }
 
@@ -74,7 +76,7 @@ impl From<&str> for DefaultValue {
 
 impl DefaultValue {
     fn to_db_string(&self) -> String {
-        format!("DEFAULT {}", self.value)
+        format!("DEFAULT ({})", self.value)
     }
 }
 
@@ -268,6 +270,8 @@ impl DBDriver for PostgresDriver {
             Cell::Bool(_) => "BOOLEAN".to_string(),
             Cell::Null => "TEXT".to_string(), // Default to TEXT for NULLs
             Cell::JsonObject(_) => "JSONB".to_string(),
+            Cell::DateTime(_) => "TIMESTAMP".to_string(),
+            Cell::DateTimeTz(_) => "TIMESTAMPTZ".to_string(),
         }
     }
 }
@@ -291,6 +295,12 @@ fn bind_to_query<'a>(
         }
         Cell::JsonObject(obj) => {
             intermediate_query = intermediate_query.bind(obj);
+        }
+        Cell::DateTime(dt) => {
+            intermediate_query = intermediate_query.bind(dt);
+        }
+        Cell::DateTimeTz(dt) => {
+            intermediate_query = intermediate_query.bind(dt);
         }
     }
     return intermediate_query;

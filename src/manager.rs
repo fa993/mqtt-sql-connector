@@ -33,7 +33,12 @@ impl<T: DBDriver + Send + Sync> Manager<T> {
                 MQTableColumnInfo {
                     column_name: "insert_ts".to_string(),
                     data_type: "TIMESTAMP".to_string(),
-                    default_value: Some("CURRENT_TIMESTAMP".into()),
+                    default_value: Some("CURRENT_TIMESTAMP AT TIME ZONE 'UTC'".into()),
+                    ..Default::default()
+                },
+                MQTableColumnInfo {
+                    column_name: "received_ts".to_string(),
+                    data_type: "TIMESTAMP".to_string(),
                     ..Default::default()
                 },
             ]
