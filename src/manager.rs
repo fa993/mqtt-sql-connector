@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::db::{DBDriver, DataRow, MQTable, MQTableColumnInfo, MQTableInfo, Modifier};
+use crate::{
+    db::{DBDriver, DataRow, MQTable, MQTableColumnInfo, MQTableInfo, Modifier},
+    utils::PreDefinedColumn,
+};
 
 pub struct Manager<T: DBDriver + Send + Sync> {
     driver: T,
@@ -20,24 +23,24 @@ impl<T: DBDriver + Send + Sync> Manager<T> {
         if !table_info.exists() {
             let col_info: MQTableInfo = vec![
                 MQTableColumnInfo {
-                    column_name: "pkey".to_string(),
+                    column_name: PreDefinedColumn::PKey.to_string(),
                     data_type: "SERIAL".to_string(),
                     modifier: Modifier::PrimaryKey,
                     ..Default::default()
                 },
                 MQTableColumnInfo {
-                    column_name: "raw".to_string(),
+                    column_name: PreDefinedColumn::Raw.to_string(),
                     data_type: "TEXT".to_string(),
                     ..Default::default()
                 },
                 MQTableColumnInfo {
-                    column_name: "insert_ts".to_string(),
+                    column_name: PreDefinedColumn::InsertTs.to_string(),
                     data_type: "TIMESTAMP".to_string(),
                     default_value: Some("CURRENT_TIMESTAMP AT TIME ZONE 'UTC'".into()),
                     ..Default::default()
                 },
                 MQTableColumnInfo {
-                    column_name: "received_ts".to_string(),
+                    column_name: PreDefinedColumn::ReceivedTs.to_string(),
                     data_type: "TIMESTAMP".to_string(),
                     ..Default::default()
                 },
@@ -56,15 +59,12 @@ impl<T: DBDriver + Send + Sync> Manager<T> {
         Ok(())
     }
 
-    pub async fn insert(&mut self, table: &MQTable, row: DataRow) -> anyhow::Result<()> {
+    async fn pre_process(&mut self, table: &MQTable, row: &DataRow) -> Result<(), anyhow::Error> {
         if !self.col_cache.contains_key(table) {
             self.initialize(table).await?;
         }
-
-        // check for new columns
         let table_info = self.col_cache.get_mut(table).unwrap();
-
-        for (col, val) in row.cells.iter() {
+        Ok(for (col, val) in row.cells.iter() {
             if !table_info.has_column(&col) {
                 let col_info = MQTableColumnInfo {
                     column_name: col.clone(),
@@ -77,8 +77,20 @@ impl<T: DBDriver + Send + Sync> Manager<T> {
                     .insert(col_info.column_name.clone(), col_info.clone());
                 self.driver.add_column_to_table(table, &col_info).await?;
             }
-        }
+        })
+    }
+
+    pub async fn insert(&mut self, table: &MQTable, row: DataRow) -> anyhow::Result<()> {
+        self.pre_process(table, &row).await?;
 
         self.driver.insert_one(row, table).await
+    }
+
+    pub async fn insert_many(&mut self, table: &MQTable, rows: &[DataRow]) -> anyhow::Result<()> {
+        for row in rows {
+            self.pre_process(table, row).await?;
+        }
+
+        self.driver.insert_many(rows, table).await
     }
 }

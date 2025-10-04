@@ -1,9 +1,12 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
-use crate::db::{Cell, DataRow};
+use crate::{
+    db::{Cell, DataRow},
+    utils::PreDefinedColumn,
+};
 
 pub fn json_to_data_row(json: &str, timestamp: DateTime<Utc>) -> anyhow::Result<DataRow> {
     let v: Value = serde_json::from_str(json)?;
@@ -11,18 +14,22 @@ pub fn json_to_data_row(json: &str, timestamp: DateTime<Utc>) -> anyhow::Result<
     let original_json = v.clone();
 
     if let Value::Object(obj) = v {
-        let mut cells: HashMap<String, Cell> = obj
+        // fix this, create a function in DataRow, to hide impl of type of map
+        let mut cells: BTreeMap<String, Cell> = obj
             .into_iter()
             .map(|(k, v)| (k, json_value_to_cell(v)))
             .collect();
 
-        cells.insert("raw".to_string(), Cell::JsonObject(original_json));
         cells.insert(
-            "received_ts".to_string(),
+            PreDefinedColumn::Raw.to_string(),
+            Cell::JsonObject(original_json),
+        );
+        cells.insert(
+            PreDefinedColumn::ReceivedTs.to_string(),
             Cell::DateTime(timestamp.naive_utc()),
         );
 
-        Ok(DataRow { cells })
+        Ok(DataRow { cells: cells })
     } else {
         anyhow::bail!("Not a JSON object");
     }

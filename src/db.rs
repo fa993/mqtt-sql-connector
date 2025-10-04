@@ -1,5 +1,5 @@
 use sqlx::{postgres::PgPoolOptions, query::Query};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::utils::get_wildcard_string;
 
@@ -17,7 +17,7 @@ pub enum Cell<Tz: chrono::TimeZone = chrono::Utc> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DataRow {
-    pub cells: HashMap<String, Cell>,
+    pub cells: BTreeMap<String, Cell>,
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
