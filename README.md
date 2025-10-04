@@ -1,3 +1,5 @@
+[![CI](https://github.com/fa993/mqtt-sql-connector/actions/workflows/rust.yml/badge.svg)](https://github.com/fa993/mqtt-sql-connector/actions/workflows/rust.yml)
+
 # Immediate Goals
 
 - [x] Stress test
